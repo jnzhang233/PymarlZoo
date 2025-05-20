@@ -1,5 +1,5 @@
 # PymarlZoo
-集成了smac，smacv2,和google football的pymarl整合版仓库。只要配置好环境，并放入对应的文件，就可以在本仓库运行MARL算法（或许会有报错）。
+集成了smac，smacv2,和google football的pymarl整合版仓库。只要配置好环境，并放入对应的文件，就可以在本仓库运行MARL算法。只需要下载工程的强依赖包即可完成基本配置，不下载个别环境不影响工程整体的运行。
 
 thanks to:
 
@@ -8,6 +8,7 @@ thanks to:
 3. https://github.com/jidiai/GRF_MARL
 4. https://github.com/oxwhirl/pymarl
 5. https://github.com/oxwhirl/smac
+6. https://github.com/oxwhirl/smacv2
 
 ## 环境配置
 
@@ -18,6 +19,19 @@ sh install_sc2.sh
 sh install_gfootball.sh
 sh install_dependencies.sh
 ```
+
+## 工程强依赖包下载：
+1. pytorch：pip install torch(如果有GPU可以配置GPU版本，详见python系列全家桶\pytorch.md，如果安装太慢了参照anaconda基本操作/kone.md来更新默认镜像源)。如果是autodl等平台的镜像，记得在一开始选服务器就选好版本，尽量是pytorch1.8.1或1.7
+2. pip install numpy==1.23.2
+3. pip install sacred
+4. pip install PyYAML==3.13
+5. pyro:pip3 install pyro-ppl
+6. python3 -m pip install --upgrade psutil wheel
+7. pip install --upgrade pip setuptools==57.5.0
+8. pip install --upgrade pip wheel==0.37.0
+9. pip install tensorboard tensorboard_logger
+
+pip install six 
 
 也可以走以下流程人工配置（比较推荐）
 
