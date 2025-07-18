@@ -1,0 +1,49 @@
+# --- VDN specific parameters ---
+
+# use epsilon greedy action selector
+action_selector: "epsilon_greedy"
+epsilon_start: 1.0
+epsilon_finish: 0.05
+epsilon_anneal_time: 100000 # 50000 for 6h_vs_8z
+
+runner: "parallel"
+batch_size_run: 16
+buffer_size: 2000 #从5000改为2000
+batch_size: 128
+optimizer: 'adam'
+
+t_max: 10050000
+
+# update the target network every {} episodes
+target_update_interval: 1 #从200改为1
+
+# use the Q_Learner to train
+mac: "n_mac"
+agent: "n_rnn"
+agent_output_type: q
+rnn_hidden_dim: 256 #新增
+
+learner: "nq_learner"
+mixer: "vdn"
+mixing_embed_dim: 32
+hypernet_embed: 64
+lr: 0.0005 # Learning rate for agents，从0.0001到0.0005
+td_lambda: 1.0 #从0.6到1.0
+#q_lambda: False
+gamma: 0.999 #新增
+
+#以下内容为新增内容
+# orthogonal init for DNN
+use_orthogonal: False
+gain: 0.01
+
+# rnn layer normalization
+use_layer_norm: False
+
+# Priority experience replay
+use_per: False
+per_alpha: 0.6
+per_beta: 0.4
+return_priority: True
+
+name: "vdn_grf"
