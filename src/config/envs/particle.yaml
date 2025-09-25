@@ -1,0 +1,12 @@
+env: "particle"
+
+env_args:
+  benchmark: False
+  episode_limit: 25
+  scenario_name: "continuous_pred_prey_3a"
+  state_mode: "all"
+  agent_view_radius: 1.5
+  score_function: "min"
+  partial_obs: True
+  discrete_action_space: True #新增参数，控制环境的动作空间是离散还是连续
+  discrete_action_input: True #新增参数，控制环境的动作输入是离散还是连续

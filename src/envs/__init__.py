@@ -2,6 +2,7 @@ from functools import partial
 import sys
 import os
 
+
 from .multiagentenv import MultiAgentEnv
 
 try:
@@ -23,6 +24,13 @@ try:
     from .gfootball import GoogleFootballEnv
 except Exception as e:
     gfootball = False
+    print(e)
+
+try:
+    mpe = True
+    from .particle import Particle
+except Exception as e:
+    mpe = False
     print(e)
 
 def env_fn(env, **kwargs) -> MultiAgentEnv:
@@ -49,5 +57,8 @@ else:
 
 if gfootball:
     REGISTRY["gfootball"] = partial(env_fn, env=GoogleFootballEnv)
+
+if mpe:
+    REGISTRY["particle"] = partial(env_fn, env=Particle)
 
 print("Supported environments:", REGISTRY)
