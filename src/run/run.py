@@ -8,7 +8,8 @@ from types import SimpleNamespace as SN
 from utils.logging import Logger
 from utils.timehelper import time_left, time_str
 from os.path import dirname, abspath
-import sys
+from gym import spaces
+import numpy as np
 
 from learners import REGISTRY as le_REGISTRY
 from runners import REGISTRY as r_REGISTRY
@@ -106,36 +107,132 @@ def run_sequential(args, logger):
     args.obs_shape = env_info["obs_shape"]
     args.accumulated_episodes = getattr(args, "accumulated_episodes", None)
 
-    if args.env in ["sc2", "sc2_v2", "gfootball"]:
-        if args.env in ["sc2", "sc2_v2"]:
-            args.output_normal_actions = env_info["n_normal_actions"]
-            args.n_enemies = env_info["n_enemies"]
-            args.n_allies = env_info["n_allies"]
+    if args.env in ["sc2", "sc2_v2"]:
+        args.output_normal_actions = env_info["n_normal_actions"]
+        args.n_enemies = env_info["n_enemies"]
+        args.n_allies = env_info["n_allies"]
         # args.obs_ally_feats_size = env_info["obs_ally_feats_size"]
         # args.obs_enemy_feats_size = env_info["obs_enemy_feats_size"]
-            args.state_ally_feats_size = env_info["state_ally_feats_size"]
-            args.state_enemy_feats_size = env_info["state_enemy_feats_size"]
-            args.obs_component = env_info["obs_component"]
-            args.state_component = env_info["state_component"]
-            args.map_type = env_info["map_type"]
-            args.agent_own_state_size = env_info["state_ally_feats_size"]
+        args.state_ally_feats_size = env_info["state_ally_feats_size"]
+        args.state_enemy_feats_size = env_info["state_enemy_feats_size"]
+        args.obs_component = env_info["obs_component"]
+        args.state_component = env_info["state_component"]
+        args.map_type = env_info["map_type"]
+        args.agent_own_state_size = env_info["state_ally_feats_size"]
 
     # Default/Base scheme
+    if args.env in ['particle']:  # MPE需要额外处理数据来构造scheme
+        env_info = runner.get_env_info()
+        args.n_agents = env_info["n_agents"]
+        args.n_actions = env_info["n_actions"]
+        args.state_shape = env_info["state_shape"]
+        args.obs_shape = env_info["obs_shape"]
+        args.action_spaces = env_info["action_spaces"]
+        args.actions_dtype = env_info["actions_dtype"]
+        args.normalise_actions = env_info.get("normalise_actions", False)  # if true, action vectors need to sum to one
+
+        ttype = th.FloatTensor if not args.use_cuda else th.cuda.FloatTensor
+        mult_coef_tensor = ttype(args.n_agents, args.n_actions)
+        action_min_tensor = ttype(args.n_agents, args.n_actions)
+        if all([isinstance(act_space, spaces.Box) for act_space in args.action_spaces]):
+            for _aid in range(args.n_agents):
+                for _actid in range(args.action_spaces[_aid].shape[0]):
+                    _action_min = args.action_spaces[_aid].low[_actid]
+                    _action_max = args.action_spaces[_aid].high[_actid]
+                    mult_coef_tensor[_aid, _actid] = (_action_max - _action_min).item()
+                    action_min_tensor[_aid, _actid] = (_action_min).item()
+        elif all([isinstance(act_space, spaces.Tuple) for act_space in args.action_spaces]):
+            for _aid in range(args.n_agents):
+                for _actid in range(args.action_spaces[_aid].spaces[0].shape[0]):
+                    _action_min = args.action_spaces[_aid].spaces[0].low[_actid]
+                    _action_max = args.action_spaces[_aid].spaces[0].high[_actid]
+                    mult_coef_tensor[_aid, _actid] = (_action_max - _action_min).item()
+                    action_min_tensor[_aid, _actid] = (_action_min).item()
+                for _actid in range(args.action_spaces[_aid].spaces[1].shape[0]):
+                    _action_min = args.action_spaces[_aid].spaces[1].low[_actid]
+                    _action_max = args.action_spaces[_aid].spaces[1].high[_actid]
+                    tmp_idx = _actid + args.action_spaces[_aid].spaces[0].shape[0]
+                    mult_coef_tensor[_aid, tmp_idx] = (_action_max - _action_min).item()
+                    action_min_tensor[_aid, tmp_idx] = (_action_min).item()
+
+        args.actions2unit_coef = mult_coef_tensor
+        args.actions2unit_coef_cpu = mult_coef_tensor.cpu()
+        args.actions2unit_coef_numpy = mult_coef_tensor.cpu().numpy()
+        args.actions_min = action_min_tensor
+        args.actions_min_cpu = action_min_tensor.cpu()
+        args.actions_min_numpy = action_min_tensor.cpu().numpy()
+
+        def actions_to_unit_box(actions):
+            if isinstance(actions, np.ndarray):
+                return args.actions2unit_coef_numpy * actions + args.actions_min_numpy
+            elif actions.is_cuda:
+                return args.actions2unit_coef * actions + args.actions_min
+            else:
+                return args.args.actions2unit_coef_cpu * actions + args.actions_min_cpu
+
+        def actions_from_unit_box(actions):
+            if isinstance(actions, np.ndarray):
+                return th.div((actions - args.actions_min_numpy), args.actions2unit_coef_numpy)
+            elif actions.is_cuda:
+                return th.div((actions - args.actions_min), args.actions2unit_coef)
+            else:
+                return th.div((actions - args.actions_min_cpu), args.actions2unit_coef_cpu)
+
+        # make conversion functions globally available
+        args.actions2unit = actions_to_unit_box
+        args.unit2actions = actions_from_unit_box
+
+        action_dtype = th.long if not args.actions_dtype == np.float32 else th.float
+        if all([isinstance(act_space, spaces.Box) for act_space in args.action_spaces]):
+            actions_vshape = 1 if not args.actions_dtype == np.float32 else max(
+                [i.shape[0] for i in args.action_spaces])
+        elif all([isinstance(act_space, spaces.Tuple) for act_space in args.action_spaces]):
+            actions_vshape = 1 if not args.actions_dtype == np.float32 else \
+                max([i.spaces[0].shape[0] + i.spaces[1].shape[0] for i in args.action_spaces])
+        elif all([isinstance(act_space, spaces.Discrete) for act_space in
+                  args.action_spaces]):  # 修改，新增Discrete版本的vshape定义
+            actions_vshape = 1
+
     scheme = {
         "state": {"vshape": env_info["state_shape"]},
         "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
-        "actions": {"vshape": (1,), "group": "agents", "dtype": th.long},
+        "actions": {"vshape": (actions_vshape,), "group": "agents", "dtype": action_dtype},
         "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
         "probs": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.float},
         "reward": {"vshape": (1,)},
-        "terminated": {"vshape": (1,), "dtype": th.uint8},
+        "terminated": {"vshape": (1,), "dtype": th.uint8}
     }
+    if hasattr(args, "scheme"):  # 如果有指定scheme
+        if args.scheme == "differ":  # differ专用的scheme，硬性规定了单位存活标签信息
+            scheme = {
+                "state": {"vshape": env_info["state_shape"]},
+                "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
+                "actions": {"vshape": (actions_vshape,), "group": "agents", "dtype": action_dtype},
+                "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
+                "probs": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.float},
+                "reward": {"vshape": (1,)},
+                "terminated": {"vshape": (1,), "dtype": th.uint8},
+                "indi_terminated": {"vshape": (env_info["n_agents"],), "dtype": th.uint8},  # DIFFER特有的
+            }
+        if args.scheme == "inspire":  # inspire专用的scheme，硬性规定了单位存活标签信息和可视标签矩阵
+            scheme = {
+                "state": {"vshape": env_info["state_shape"]},
+                "obs": {"vshape": env_info["obs_shape"], "group": "agents"},
+                "actions": {"vshape": (actions_vshape,), "group": "agents", "dtype": action_dtype},
+                "avail_actions": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.int},
+                "probs": {"vshape": (env_info["n_actions"],), "group": "agents", "dtype": th.float},
+                "reward": {"vshape": (1,)},
+                "terminated": {"vshape": (1,), "dtype": th.uint8},
+                "indi_terminated": {"vshape": (env_info["n_agents"],), "dtype": th.uint8},  # 单位存活标签
+                "visibility_matrix": {"vshape": (env_info["n_agents"],), "dtype": th.uint8},  # 可视标签
+            }
     groups = {
         "agents": args.n_agents
     }
     preprocess = {
         "actions": ("actions_onehot", [OneHot(out_dim=args.n_actions)])
     }
+
     # [batch, episode_length, n_agents, feature_dim]
     buffer = ReplayBuffer(scheme, groups, args.buffer_size, env_info["episode_limit"] + 1,
                           preprocess=preprocess,

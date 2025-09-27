@@ -82,6 +82,10 @@ class EpisodeRunner:
             cpu_actions = actions.to("cpu").numpy()
 
             reward, terminated, env_info = self.env.step(actions[0])
+            if self.args.env in ["particle"]:#适配mpe，对reward做合并处理
+                if isinstance(reward, (list, tuple)):
+                    assert (reward[1:] == reward[:-1]), "reward has to be cooperative!"
+                    reward = reward[0]
             episode_return += reward
 
             post_transition_data = {

@@ -92,9 +92,9 @@ class Scenario(BaseScenario):
         chosen_action = np.array([x[best_idx], y[best_idx]], dtype=np.float32)
         if scores[best_idx] < 0:
             chosen_action *= 0.0 # cannot go anywhere
-        if getattr(self.args,"discrete_action_space",False):#修改，如果采用离散动作空间，这里也应该改成离散动作空间以保证公平
-            chosen_action[np.argmin(np.abs(chosen_action))] = 0
-            chosen_action = np.sign(chosen_action)
+        #改成离散动作空间以保证公平
+        chosen_action[np.argmin(np.abs(chosen_action))] = 0
+        chosen_action = np.sign(chosen_action)
         return chosen_action
 
     def reset_world(self, world):

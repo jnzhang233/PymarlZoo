@@ -160,6 +160,11 @@ class ParallelRunner:
             for idx, parent_conn in enumerate(self.parent_conns):
                 if not terminated[idx]:
                     data = parent_conn.recv()
+                    if self.args.env in ["particle"]:#如果是mpe，需要单独处理一下奖励以保证格式一致
+                        reward = data["reward"]
+                        if isinstance(reward, (list, tuple)):
+                            assert (reward[1:] == reward[:-1]), "reward has to be cooperative!"
+                            data["reward"] = reward[0]
                     # Remaining data for this current timestep
                     post_transition_data["reward"].append((data["reward"],))
 

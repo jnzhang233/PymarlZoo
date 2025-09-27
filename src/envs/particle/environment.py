@@ -27,10 +27,10 @@ class MultiAgentEnv(gym.Env):
         self.observation_callback = observation_callback
         self.info_callback = info_callback
         self.done_callback = done_callback
-        # environment parameters
-        self.discrete_action_space = args.discrete_action_space#修改，通过环境的配置文件设置为离散模式。之前是False
+        # environment parameters，现在默认是离散动作空间和离散动作输入。连续版本的在这个环境跑不通。
+        # self.discrete_action_space = args.discrete_action_space#修改，通过环境的配置文件设置为离散模式。之前是False
         # if true, action is a number 0...N, otherwise action is a one-hot N-dimensional vector
-        self.discrete_action_input = args.discrete_action_input#修改，通过环境的配置文件设置为离散动作模式，之前是False
+        # self.discrete_action_input = args.discrete_action_input#修改，通过环境的配置文件设置为离散动作模式，之前是False
         # if true, even the action is continuous, action will be performed discretely
         self.force_discrete_action = world.discrete_action if hasattr(world, 'discrete_action') else False
         # if true, every agent has the same reward
@@ -42,18 +42,20 @@ class MultiAgentEnv(gym.Env):
         self.observation_space = []
         for agent in self.agents:
             total_action_space = []
-            # physical action space
-            if self.discrete_action_space:
-                u_action_space = spaces.Discrete(world.dim_p * 2 + 1)
-            else:
-                u_action_space = spaces.Box(low=-agent.u_range, high=+agent.u_range, shape=(world.dim_p,), dtype=np.float32)
+            # physical action space，把连续动作的部分注释掉
+            u_action_space = spaces.Discrete(world.dim_p * 2 + 1)
+            # if self.discrete_action_space:
+            #     u_action_space = spaces.Discrete(world.dim_p * 2 + 1)
+            # else:
+            #     u_action_space = spaces.Box(low=-agent.u_range, high=+agent.u_range, shape=(world.dim_p,), dtype=np.float32)
             if agent.movable:
                 total_action_space.append(u_action_space)
-            # communication action space
-            if self.discrete_action_space:
-                c_action_space = spaces.Discrete(world.dim_c)
-            else:
-                c_action_space = spaces.Box(low=0.0, high=1.0, shape=(world.dim_c,), dtype=np.float32)
+            # communication action space，把连续动作的部分注释掉
+            c_action_space = spaces.Discrete(world.dim_c)
+            # if self.discrete_action_space:
+            #     c_action_space = spaces.Discrete(world.dim_c)
+            # else:
+            #     c_action_space = spaces.Box(low=0.0, high=1.0, shape=(world.dim_c,), dtype=np.float32)
             if not agent.silent:
                 total_action_space.append(c_action_space)
             # total action space
@@ -168,35 +170,43 @@ class MultiAgentEnv(gym.Env):
 
         if agent.movable:
             # physical action
-            if self.discrete_action_input:
-                agent.action.u = np.zeros(self.world.dim_p)
-                # process discrete action
-                if action[0] == 1: agent.action.u[0] = -1.0
-                if action[0] == 2: agent.action.u[0] = +1.0
-                if action[0] == 3: agent.action.u[1] = -1.0
-                if action[0] == 4: agent.action.u[1] = +1.0
-            else:
-                if self.force_discrete_action:
-                    d = np.argmax(action[0])
-                    action[0][:] = 0.0
-                    action[0][d] = 1.0
-                if self.discrete_action_space:
-                    agent.action.u[0] += action[0][1] - action[0][2]
-                    agent.action.u[1] += action[0][3] - action[0][4]
-                else:
-                    agent.action.u = action[0]
+                # process discrete action，把连续动作的部分注释掉
+            agent.action.u = np.zeros(self.world.dim_p)
+            if action[0] == 1: agent.action.u[0] = -1.0
+            if action[0] == 2: agent.action.u[0] = +1.0
+            if action[0] == 3: agent.action.u[1] = -1.0
+            if action[0] == 4: agent.action.u[1] = +1.0
+            # if self.discrete_action_input:
+            #     agent.action.u = np.zeros(self.world.dim_p)
+            #     # process discrete action
+            #     if action[0] == 1: agent.action.u[0] = -1.0
+            #     if action[0] == 2: agent.action.u[0] = +1.0
+            #     if action[0] == 3: agent.action.u[1] = -1.0
+            #     if action[0] == 4: agent.action.u[1] = +1.0
+            # else:
+            #     if self.force_discrete_action:
+            #         d = np.argmax(action[0])
+            #         action[0][:] = 0.0
+            #         action[0][d] = 1.0
+            #     if self.discrete_action_space:
+            #         agent.action.u[0] += action[0][1] - action[0][2]
+            #         agent.action.u[1] += action[0][3] - action[0][4]
+            #     else:
+            #         agent.action.u = action[0]
             sensitivity = 5.0
             if agent.accel is not None:
                 sensitivity = agent.accel
             agent.action.u *= sensitivity
             action = action[1:]
         if not agent.silent:
-            # communication action
-            if self.discrete_action_input:
-                agent.action.c = np.zeros(self.world.dim_c)
-                agent.action.c[action[0]] = 1.0
-            else:
-                agent.action.c = action[0]
+            # communication action，把连续动作的部分注释掉
+            agent.action.c = np.zeros(self.world.dim_c)
+            agent.action.c[action[0]] = 1.0
+            # if self.discrete_action_input:
+            #     agent.action.c = np.zeros(self.world.dim_c)
+            #     agent.action.c[action[0]] = 1.0
+            # else:
+            #     agent.action.c = action[0]
             action = action[1:]
         # make sure we used all elements of action
         assert len(action) == 0
